@@ -28,7 +28,14 @@
 extern "C" {
 #endif // __cplusplus
 
-DLL_PUBLIC void p2c();
+DLL_PUBLIC void p2c(
+    double *wp,
+    double *xp,
+    double *cameraParams,
+    double *imagePoints,
+    double *worldPoints,
+    unsigned int N,
+    unsigned int F);
 
 #ifdef __cplusplus
 } // extern "C"
