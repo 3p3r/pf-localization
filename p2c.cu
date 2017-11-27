@@ -125,6 +125,10 @@ extern "C" {
         thrust::for_each(
             thrust::host, first, last,
             updateWeightsOp(input, observation_points.data()));
+
+        // normalize to 0...1, since weights are a PDF
+        const auto sum = thrust::reduce(thrust::host, input.wp, input.wp + input.N);
+        thrust::transform(thrust::host, input.wp, input.wp + input.N, input.wp, thrust::placeholders::_1 / sum);
     }
 
     DLL_PUBLIC void updateWeights_gpu(System input) {
@@ -159,6 +163,10 @@ extern "C" {
         thrust::for_each(
             thrust::device, first, last,
             updateWeightsOp(d_system, raw_pointer_cast(d_observation_points.data())));
+
+        // normalize to 0...1, since weights are a PDF
+        const auto sum = thrust::reduce(thrust::device, d_wp.cbegin(), d_wp.cend());
+        thrust::transform(thrust::device, d_wp.begin(), d_wp.end(), d_wp.begin(), thrust::placeholders::_1 / sum);
 
         // transfer GPU data >> to Matlab (host)
         ::cudaMemcpy(input.wp, thrust::raw_pointer_cast(d_wp.data()),
