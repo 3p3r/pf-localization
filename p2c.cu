@@ -8,6 +8,7 @@
 
 #define GLM_FORCE_CUDA
 #include <glm/glm.hpp>
+#include <glm/gtc/quaternion.hpp>
 
 struct updateWeightsOp {
     updateWeightsOp(const System& input) :
@@ -17,10 +18,35 @@ struct updateWeightsOp {
 
     __host__ __device__
     void operator()(std::size_t i) {
-        glm::dvec3 translation(input.xp[i], input.xp[input.N+i], input.xp[2*input.N+i]);
-        glm::dvec4 quaternion(input.xp[3*input.N+i], input.xp[4*input.N+i], input.xp[5*input.N+i], input.xp[6*input.N+i]);
+        using namespace glm;
+        dvec3 t(input.xp[i], input.xp[input.N+i], input.xp[2*input.N+i]);
+        dmat3x3 R = mat3_cast(dquat(input.xp[3 * input.N + i], input.xp[4 * input.N + i], input.xp[5 * input.N + i], input.xp[6 * input.N + i]));
+        cameraPoseToExtrinsics(t, R);
+        dmat4x3 camMatrix = cameraMatrix(R, t);
 
         input.wp[i] = i;
+    }
+
+    __host__ __device__
+    // https://www.mathworks.com/help/vision/ref/cameraposetoextrinsics.html
+    void cameraPoseToExtrinsics(glm::dvec3& t, glm::dmat3x3& R) {
+        R = glm::transpose(R);
+        t = -t * R;
+    }
+
+    __host__ __device__
+    // https://www.mathworks.com/help/vision/ref/cameramatrix.html
+    glm::dmat4x3 cameraMatrix(const glm::dmat3x3& R, const glm::dvec3& t) {
+        glm::dmat3x3 K(input.cameraParams[0], input.cameraParams[3], input.cameraParams[6],
+                       input.cameraParams[1], input.cameraParams[4], input.cameraParams[7],
+                       input.cameraParams[2], input.cameraParams[5], input.cameraParams[8]);
+
+        glm::dmat4x3 Rt(R[0].x, R[1].x, R[2].x,
+                        R[0].y, R[1].y, R[2].y,
+                        R[0].z, R[1].z, R[2].z,
+                        t.x, t.y, t.z);
+
+        return K * Rt;
     }
 };
 
@@ -63,3 +89,4 @@ extern "C" {
     }
 
 }
+
