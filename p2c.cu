@@ -8,13 +8,45 @@
 
 #define GLM_FORCE_CUDA
 #include <glm/glm.hpp>
+#include <glm/matrix.hpp>
 #include <glm/gtc/quaternion.hpp>
 
+// https://en.wikipedia.org/wiki/Algorithms_for_calculating_variance
+class onlineCovariance {
+  public:
+    __host__ __device__
+    void update(double x, double y) {
+        n += 1;
+        auto dx = x - meanx;
+        meanx += dx / n;
+        meany += (y - meany) / n;
+        C += dx * (y - meany);
+    }
+
+    __host__ __device__
+    double getPopulationCov() {
+        return C / n;
+    }
+
+    __host__ __device__
+    // Bessel's correction for sample variance
+    double getSampleCov() {
+        return C / (n - 1);
+    }
+
+  private:
+    double meanx = 0;
+    double meany = 0;
+    double C = 0;
+    double n = 0;
+};
+
 struct updateWeightsOp {
-    updateWeightsOp(const System& input) :
-        input(input) { /* no-op */ }
+    updateWeightsOp(const System& input, double* observationPoints) :
+        input(input), observationPoints(observationPoints) { /* no-op */ }
 
     System input;
+    double *observationPoints;
 
     __host__ __device__
     void operator()(std::size_t i) {
@@ -24,7 +56,36 @@ struct updateWeightsOp {
         cameraPoseToExtrinsics(t, R);
         dmat4x3 camMatrix = cameraMatrix(R, t);
 
-        input.wp[i] = i;
+        onlineCovariance cov_xx;
+        onlineCovariance cov_yy;
+        onlineCovariance cov_xy;
+        for (unsigned j = 0; j < input.F; ++j) {
+            dvec3 projection{
+                camMatrix * dvec4(input.worldPoints[j], input.worldPoints[input.F + j], input.worldPoints[2 * input.F + j], 1)
+            };
+            auto x = projection.x / projection.z;
+            auto y = projection.y / projection.z;
+            cov_xx.update(x, x);
+            cov_yy.update(y, y);
+            cov_xy.update(x, y);
+            observationPoints[2 * i*input.F + 2 * j] = x;
+            observationPoints[2 * i*input.F + 2 * j+1] = y;
+        }
+
+        dmat2x2 C(cov_xx.getSampleCov(), cov_xy.getSampleCov(),
+                  cov_xy.getSampleCov(), cov_yy.getSampleCov());
+        dmat2x2 invC = glm::inverse(C);
+
+        double D = 0;
+        for (unsigned j = 0; j < input.F; ++j) {
+            glm::dvec2 d {
+                observationPoints[2 * i*input.F + 2 * j] - input.imagePoints[j],
+                observationPoints[2 * i*input.F + 2 * j + 1] - input.imagePoints[input.F + j]
+            };
+            D += glm::dot(d, invC*d);
+        }
+
+        input.wp[i] = (1 / (2 * glm::pi<double>()*sqrt(glm::determinant(C))))*exp(-D / 2);
     }
 
     __host__ __device__
@@ -53,13 +114,27 @@ struct updateWeightsOp {
 extern "C" {
 
     DLL_PUBLIC void updateWeights_cpu(System input) {
+        static std::vector<double> observation_points;
+        const auto observation_size = input.N * input.F * 2;
+
+        if (observation_points.size() != observation_size)
+            observation_points.resize(observation_size);
+
         const thrust::counting_iterator<std::size_t> first(0);
         const auto last = first + input.N;
-        thrust::for_each(thrust::host, first, last, updateWeightsOp(input));
+        thrust::for_each(
+            thrust::host, first, last,
+            updateWeightsOp(input, observation_points.data()));
     }
 
     DLL_PUBLIC void updateWeights_gpu(System input) {
         using vec = thrust::device_vector<double>;
+
+        static vec d_observation_points;
+        const auto observation_size = input.N * input.F * 2;
+
+        if (d_observation_points.size() != observation_size)
+            d_observation_points.resize(observation_size);
 
         // transfer Matlab data >> to GPU (device)
         vec d_wp(input.wp, input.wp + input.N);
@@ -81,7 +156,9 @@ extern "C" {
 
         const thrust::counting_iterator<std::size_t> first(0);
         const auto last = first + input.N;
-        thrust::for_each(thrust::device, first, last, updateWeightsOp(d_system));
+        thrust::for_each(
+            thrust::device, first, last,
+            updateWeightsOp(d_system, raw_pointer_cast(d_observation_points.data())));
 
         // transfer GPU data >> to Matlab (host)
         ::cudaMemcpy(input.wp, thrust::raw_pointer_cast(d_wp.data()),
@@ -89,4 +166,3 @@ extern "C" {
     }
 
 }
-
