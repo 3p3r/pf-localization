@@ -9,7 +9,7 @@ function plotSystem(truT,truR,pfT,pfR,index)
             scatter3(pfT(1), pfT(2), pfT(3), 'r*');
             legend('True', 'Particle Filter');
             title('3D camera path (mm)');
-            axis tight; box on; grid on;
+            box on; grid on;
         hold off; k = 2;
         
         subplot(m,n,k);hold on;
@@ -35,7 +35,7 @@ function plotSystem(truT,truR,pfT,pfR,index)
             scatter(index, pfR(4), 'r*');
             title(['Quaternion-z MSE=' num2str(immse(truR(4),pfR(4)),6)]);
             axis tight; box on;
-        drawnow; hold off; k = k + 2;
+        hold off; k = k + 2;
         
         subplot(m,n,k);hold on;
             scatter(index, truT(1), 'b*');
