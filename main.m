@@ -4,24 +4,18 @@ close all;
 rng default;
 addpath bin;
 addpath helpers;
-loadlibrary p2c;
+if ~libisloaded('p2c'); loadlibrary p2c; end;
 
 N = 1000000; % particle count
 input = 'data/board.mp4'; % video file
-policy = 'gpu'; % can be: 'gpu', 'cpu', or 'matlab'
-positionSigma = 50*[1 1 5]; % mm, in XYZ axes
+policy = 'gpu'; % 'gpu', 'cpu', or 'matlab'
+positionSigma = 10*[1 1 1]; % mm, in XYZ axes
 rotationSigma = 0.1; % radians, in Euler axes
 groundTruth = ggt(input); % ground truth 2d and 3d data
 [positionNoise, rotationNoise] = grn(N, positionSigma, rotationSigma);
 frameCount = length(groundTruth); % this is how many total frames we have
 
 % Initialization
-vr = VideoReader(input);
-load('cameraParams.mat');
-readFrame(vr); % discard the first frame, it's used for initialization
-% tracking (localization) begins in the second frame (post initialization)
-z = zeros(frameCount,7); % all estimates of quaternion and translation (means)
-
 System.wp = zeros(N,1); % particle weights
 System.xp = zeros(N,1); % particles
 System.cameraParams = cameraParams.IntrinsicMatrix;
@@ -31,9 +25,7 @@ System.N = N; % static constant, number of particles
 System.F = 0; % updated every frame, number of features found in image
 
 index = 1;
-while hasFrame(vr)
-    frame = rgb2gray(readFrame(vr));
-    frameUndistorted = undistortImage(frame, cameraParams);
+while index <= length(groundTruth)
     x = groundTruth(index);
     System.F = size(x.WorldPoints,1);
     System.imagePoints = x.ImagePoints;
@@ -48,7 +40,7 @@ while hasFrame(vr)
         % second frame onward is for tracking (localization)
         System.xp = updateParticles(System,positionNoise,rotationNoise);
         System.wp = updateWeights(System,cameraParams,policy);
-        System.xp = resampleParticles(System);
+        [System.xp,System.wp] = resampleParticles(System);
         [q,t] = extractEstimates(System);
         plotSystem(x.TranslationExtrinsics,x.RotationExtrinsics,t,q,index);
     end
@@ -70,12 +62,13 @@ function [q,t] = extractEstimates(System)
 end
 
 % Systematic resmapling of particles.
-function xp = resampleParticles(System)
+function [xp,wp] = resampleParticles(System)
     R = cumsum(System.wp);
-    N = size(System.wp,1);
+    N = length(System.wp);
     T = rand(1, N);
     [~, I] = histc(T, R);
     xp = System.xp(I + 1, :);
+    wp = ones(N,1) / N;
 end
 
 % Updates particle weights based on their liklihood (measurement model).
