@@ -24,18 +24,29 @@
 #endif
 #endif
 
+/**
+* wp is Nx1
+* xp is Nx7
+* cameraParams is 3x3
+* imagePoints is Fx2
+* worldPoints is Fx3
+*/
+typedef struct System {
+    double *wp;
+    double *xp;
+    double *cameraParams;
+    double *imagePoints;
+    double *worldPoints;
+    unsigned int N;
+    unsigned int F;
+} System;
+
 #ifdef __cplusplus
 extern "C" {
 #endif // __cplusplus
 
-DLL_PUBLIC void p2c(
-    double *wp,
-    double *xp,
-    double *cameraParams,
-    double *imagePoints,
-    double *worldPoints,
-    unsigned int N,
-    unsigned int F);
+DLL_PUBLIC void updateWeights_cpu(System input);
+DLL_PUBLIC void updateWeights_gpu(System input);
 
 #ifdef __cplusplus
 } // extern "C"

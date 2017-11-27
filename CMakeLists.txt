@@ -27,6 +27,7 @@ ENDIF()
 ADD_DEFINITIONS( -DBUILDING_DLL )
 
 LIST( APPEND CUDA_NVCC_FLAGS "-Wno-deprecated-gpu-targets" )
+INCLUDE_DIRECTORIES( "helpers/glm" )
 
 #===============================================================================
 # Build targets

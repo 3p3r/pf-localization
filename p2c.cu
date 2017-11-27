@@ -1,97 +1,65 @@
 #include "p2c.h"
 
 #include <thrust/iterator/zip_iterator.h>
+#include <thrust/execution_policy.h>
 #include <thrust/device_vector.h>
 #include <thrust/device_ptr.h>
 #include <thrust/for_each.h>
-#include <thrust/tuple.h>
 
-#include <vector>
-#include <cmath>
-
-#ifdef BUILDING_GPU
-using vec = thrust::device_vector<double>;
-#else
-using vec = std::vector<double>;
-#endif
+#define GLM_FORCE_CUDA
+#include <glm/glm.hpp>
 
 struct updateWeightsOp {
-    updateWeightsOp(
-        double *wp,
-        double *xp,
-        double *cameraParams,
-        double *imagePoints,
-        double *worldPoints,
-        unsigned int N,
-        unsigned int F) :
-        wp(wp),
-        xp(xp),
-        cameraParams(cameraParams),
-        imagePoints(imagePoints),
-        worldPoints(worldPoints),
-        N(N), F(F) { /* no-op */ }
+    updateWeightsOp(const System& input) :
+        input(input) { /* no-op */ }
 
-    double *wp;
-    double *xp;
-    double *cameraParams;
-    double *imagePoints;
-    double *worldPoints;
-    unsigned int N;
-    unsigned int F;
+    System input;
 
     __host__ __device__
-    void operator()(const thrust::tuple<std::size_t, const double>& particle) {
-        auto idx = thrust::get<0>(particle);
-        auto data = thrust::get<1>(particle);
+    void operator()(std::size_t i) {
+        glm::dvec3 translation(input.xp[i], input.xp[input.N+i], input.xp[2*input.N+i]);
+        glm::dvec4 quaternion(input.xp[3*input.N+i], input.xp[4*input.N+i], input.xp[5*input.N+i], input.xp[6*input.N+i]);
+
+        input.wp[i] = i;
     }
 };
 
 extern "C" {
 
-    /**
-     * wp is Nx1
-     * xp is Nx7
-     * cameraParams is 3x3
-     * imagePoints is Fx2
-     * worldPoints is Fx3
-     */
-    DLL_PUBLIC DLL_PUBLIC void p2c(
-        double *wp,
-        double *xp,
-        double *cameraParams,
-        double *imagePoints,
-        double *worldPoints,
-        unsigned int N,
-        unsigned int F) {
-
-        vec d_wp(wp,wp + N);
-        vec d_xp(xp, xp + N*7);
-        vec d_cameraParams(cameraParams, cameraParams + 3*3);
-        vec d_imagePoints(imagePoints, imagePoints + F * 2);
-        vec d_worldPoints(worldPoints, worldPoints + F * 2);
-
-        thrust::counting_iterator<std::size_t> first(0);
-        thrust::counting_iterator<std::size_t> last = first + N;
-
-        thrust::for_each(
-            thrust::make_zip_iterator(
-                thrust::make_tuple(first, d_wp.begin())),
-            thrust::make_zip_iterator(
-                thrust::make_tuple(last, d_wp.end())),
-            updateWeightsOp(
-                thrust::raw_pointer_cast(d_wp.data()),
-                thrust::raw_pointer_cast(d_xp.data()),
-                thrust::raw_pointer_cast(d_cameraParams.data()),
-                thrust::raw_pointer_cast(d_imagePoints.data()),
-                thrust::raw_pointer_cast(d_worldPoints.data()),
-                N, F
-            )
-        );
-
-#ifdef BUILDING_GPU
-        ::cudaMemcpy(wp, thrust::raw_pointer_cast(d_wp.data()), N * sizeof(double), cudaMemcpyDeviceToHost);
-#else
-        ::cudaMemcpy(wp, thrust::raw_pointer_cast(d_wp.data()), N * sizeof(double), cudaMemcpyHostToHost);
-#endif
+    DLL_PUBLIC void updateWeights_cpu(System input) {
+        const thrust::counting_iterator<std::size_t> first(0);
+        const auto last = first + input.N;
+        thrust::for_each(thrust::host, first, last, updateWeightsOp(input));
     }
+
+    DLL_PUBLIC void updateWeights_gpu(System input) {
+        using vec = thrust::device_vector<double>;
+
+        // transfer Matlab data >> to GPU (device)
+        vec d_wp(input.wp, input.wp + input.N);
+        vec d_xp(input.xp, input.xp + input.N*7);
+        vec d_cameraParams(input.cameraParams, input.cameraParams + 3*3);
+        vec d_imagePoints(input.imagePoints, input.imagePoints + input.F * 2);
+        vec d_worldPoints(input.worldPoints, input.worldPoints + input.F * 2);
+
+        // this will be available to every thread on GPU (data)
+        const System d_system{
+            raw_pointer_cast(d_wp.data()),
+            raw_pointer_cast(d_xp.data()),
+            raw_pointer_cast(d_cameraParams.data()),
+            raw_pointer_cast(d_imagePoints.data()),
+            raw_pointer_cast(d_worldPoints.data()),
+            input.N,
+            input.F
+        };
+
+        const thrust::counting_iterator<std::size_t> first(0);
+        const auto last = first + input.N;
+        thrust::for_each(thrust::device, first, last, updateWeightsOp(d_system));
+
+        // transfer GPU data >> to Matlab (host)
+        ::cudaMemcpy(input.wp, thrust::raw_pointer_cast(d_wp.data()),
+                     input.N * sizeof(double), cudaMemcpyDeviceToHost);
+    }
+
 }
