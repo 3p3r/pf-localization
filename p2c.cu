@@ -85,7 +85,7 @@ struct updateWeightsOp {
             D += glm::dot(d, invC*d);
         }
 
-        input.wp[i] = (1 / (2 * glm::pi<double>()*sqrt(glm::determinant(C))))*exp(-D / 2);
+        input.wp[i] = input.wp[i] * (1 / (2 * glm::pi<double>()*sqrt(glm::determinant(C))))*exp(-D / 2);
     }
 
     __host__ __device__
