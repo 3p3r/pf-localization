@@ -2,7 +2,9 @@ clc;
 clear all;
 close all;
 rng default;
+addpath bin;
 addpath helpers;
+loadlibrary p2c;
 
 N = 1000; % particle count
 input = 'data/board.mp4'; % video file
@@ -19,23 +21,34 @@ readFrame(vr); % discard the first frame, it's used for initialization
 % tracking (localization) begins in the second frame (post initialization)
 z = zeros(frameCount,7); % all estimates of quaternion and translation (means)
 
+System.wp = zeros(N,1); % particle weights
+System.xp = zeros(N,1); % particles
+System.cameraParams = cameraParams.IntrinsicMatrix;
+System.imagePoints = []; % 2D feature locations in the image
+System.worldPoints = []; % corresponding 3D world points
+System.N = N; % static constant, number of particles
+System.F = 0; % updated every frame, number of features found in image
+
 index = 1;
 while hasFrame(vr)
     frame = rgb2gray(readFrame(vr));
     frameUndistorted = undistortImage(frame, cameraParams);
     x = groundTruth(index);
+    System.F = size(x.WorldPoints,1);
+    System.imagePoints = x.ImagePoints;
+    System.worldPoints = x.WorldPoints;
     
     if index == 1
         % first frame is for initialization
         q = x.RotationExtrinsics;
         t = x.TranslationExtrinsics;
-        [xp,wp] = createParticles(q,t,N);
+        [System.xp,System.wp] = createParticles(q,t,N);
     else
         % second frame onward is for tracking (localization)
-        xp = updateParticles(xp,positionNoise,rotationNoise);
-        wp = updateWeights(wp,xp,cameraParams,x.ImagePoints,x.WorldPoints);
-        xp = resampleParticles(xp,wp);
-        [q,t] = extractEstimates(xp);
+        updateParticles(System,positionNoise,rotationNoise);
+        updateWeights(System,cameraParams);
+        resampleParticles(System);
+        [q,t] = extractEstimates(System);
     end
     
     disp(num2str(index));
@@ -44,58 +57,66 @@ end
 
 % _________________________________________________________________________
 % Extratcs the mean of particles as system's estimate.
-function [q,t] = extractEstimates(xp)
-    Qe = mean(xp(:,4:7)); % estimated quaternion
-    Te = mean(xp(:,1:3)); % estimated translation
+function [q,t] = extractEstimates(System)
+    Qe = mean(System.xp(:,4:7)); % estimated quaternion
+    Te = mean(System.xp(:,1:3)); % estimated translation
     [Qp,t] = cameraPoseToExtrinsics(quat2rotm(Qe),Te);
     q = rotm2quat(Qp);
 end
 
 % Systematic resmapling of particles.
-function xp = resampleParticles(xp,wp)
-    R = cumsum(wp);
-    N = size(wp,1);
+function resampleParticles(System)
+    R = cumsum(System.wp);
+    N = size(System.wp,1);
     T = rand(1, N);
     [~, I] = histc(T, R);
-    xp = xp(I + 1, :);
+    System.xp = System.xp(I + 1, :);
 end
 
 % Updates particle weights based on their liklihood (measurement model).
-function wp = updateWeights(wp,xp,cameraParams,imagePoints,worldPoints)
-    N = size(wp,1);
-    featureCount = size(worldPoints, 1);
-    observationPoints = imagePoints * 0;
+function updateWeights(System,cameraParams)
+    N = size(System.wp,1);
+    observationPoints = System.imagePoints * 0;
+    System.xp(1,1:3)
+    System.xp(1,4:7)
+    nativeUpdateWeights(System);
     
     for i=1:N
-        t = xp(i,1:3);
-        R = quat2rotm(xp(i,4:7));
+        t = System.xp(i,1:3);
+        R = quat2rotm(System.xp(i,4:7));
         [Rx,tx] = cameraPoseToExtrinsics(R,t);
         camMatrix = cameraMatrix(cameraParams,Rx,tx);
 
-        for j=1:featureCount
-            projection = [worldPoints(j,:) 1] * camMatrix;
+        for j=1:System.F
+            projection = [System.worldPoints(j,:) 1] * camMatrix;
             projection = projection ./ projection(3);
             observationPoints(j,:) = projection(1:2);
         end
         
         C = cov(observationPoints(:,:));
-        D = zeros(featureCount,1);
+        D = zeros(System.F,1);
         
-        for j=1:featureCount
-            d = observationPoints(j,:)-imagePoints(j,:);
+        for j=1:System.F
+            d = observationPoints(j,:)-System.imagePoints(j,:);
             D(j) = (d/C)*d';
         end
         
-        wp(i) = (1/(2*pi*sqrt(det(C))))*exp(-sum(D)/2);
+        System.wp(i) = (1/(2*pi*sqrt(det(C))))*exp(-sum(D)/2);
     end
     
-    wp = wp ./ sum(wp);
+    System.wp = System.wp ./ sum(System.wp);
+end
+
+function nativeUpdateWeights(System)
+    System.wp = libpointer('doublePtr',System.wp);
+    calllib('p2c','updateWeights_cpu',System);
+    System.wp = get(System.wp,'Value');
 end
 
 % Adds noise to particles (system model)
-function xp = updateParticles(xp,posNoise,rotNoise)
-    xp(:,1:3) = xp(:,1:3) + posNoise;
-    xp(:,4:7) = quatmultiply(xp(:,4:7), rotNoise);
+function updateParticles(System,posNoise,rotNoise)
+    System.xp(:,1:3) = System.xp(:,1:3) + posNoise;
+    System.xp(:,4:7) = quatmultiply(System.xp(:,4:7), rotNoise);
 end
 
 % Creates the initial particle cloud
