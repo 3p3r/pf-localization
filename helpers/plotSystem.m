@@ -1,7 +1,6 @@
 function plotSystem(truT,truR,pfT,pfR,index)
-    truR = rotm2eul(truR);
-    pfR = rotm2eul(pfR);
-    m = 6; n = 2;
+    m = length(truT)+length(truR); n = 2;
+    assert(m == length(pfT)+length(pfR));
     
     figure(2); hold on;
     
@@ -11,43 +10,49 @@ function plotSystem(truT,truR,pfT,pfR,index)
             legend('True', 'Particle Filter');
             title('3D camera path (mm)');
             axis tight; box on; grid on;
-        hold off;
+        hold off; k = 2;
         
-        subplot(m,n,2);hold on;
+        subplot(m,n,k);hold on;
             scatter(index, truR(1), 'b*');
             scatter(index, pfR(1), 'r*');
-            title('Euler rotation \alpha (radians)');
+            title(['Quaternion-w MSE=' num2str(immse(truR(1),pfR(1)),6)]);
             axis tight; box on;
-        hold off;
-        subplot(m,n,4);hold on;
+        hold off; k = k + 2;
+        subplot(m,n,k);hold on;
             scatter(index, truR(2), 'b*');
             scatter(index, pfR(2), 'r*');
-            title('Euler rotation \beta (radians)');
+            title(['Quaternion-x MSE=' num2str(immse(truR(2),pfR(2)),6)]);
             axis tight; box on;
-        hold off;
-        subplot(m,n,6);hold on;
+        hold off; k = k + 2;
+        subplot(m,n,k);hold on;
             scatter(index, truR(3), 'b*');
             scatter(index, pfR(3), 'r*');
-            title('Euler rotation \gamma (radians)');
+            title(['Quaternion-y MSE=' num2str(immse(truR(3),pfR(3)),6)]);
             axis tight; box on;
-        drawnow; hold off;
+        hold off; k = k + 2;
+        subplot(m,n,k);hold on;
+            scatter(index, truR(4), 'b*');
+            scatter(index, pfR(4), 'r*');
+            title(['Quaternion-z MSE=' num2str(immse(truR(4),pfR(4)),6)]);
+            axis tight; box on;
+        drawnow; hold off; k = k + 2;
         
-        subplot(m,n,8);hold on;
+        subplot(m,n,k);hold on;
             scatter(index, truT(1), 'b*');
             scatter(index, pfT(1), 'r*');
-            title('x-axis');
+            title(['Translation-x MSE=' num2str(immse(truT(1),pfT(1)),6)]);
             axis tight; box on;
-        hold off;
-        subplot(m,n,10);hold on;
+        hold off; k = k + 2;
+        subplot(m,n,k);hold on;
             scatter(index, truT(2), 'b*');
             scatter(index, pfT(2), 'r*');
-            title('y-axis');
+            title(['Translation-y MSE=' num2str(immse(truT(2),pfT(2)),6)]);
             axis tight; box on;
-        hold off;
-        subplot(m,n,12); hold on;
+        hold off; k = k + 2;
+        subplot(m,n,k); hold on;
             scatter(index, truT(3), 'b*');
             scatter(index, pfT(3), 'r*');
-            title('z-axis');
+            title(['Translation-z MSE=' num2str(immse(truT(3),pfT(3)),6)]);
             axis tight; box on;
         hold off;
         

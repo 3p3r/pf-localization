@@ -6,10 +6,10 @@ addpath bin;
 addpath helpers;
 loadlibrary p2c;
 
-N = 500000; % particle count
+N = 1000000; % particle count
 input = 'data/board.mp4'; % video file
 policy = 'gpu'; % can be: 'gpu', 'cpu', or 'matlab'
-positionSigma = 50*[1 1 2]; % mm, in XYZ axes
+positionSigma = 50*[1 1 5]; % mm, in XYZ axes
 rotationSigma = 0.1; % radians, in Euler axes
 groundTruth = ggt(input); % ground truth 2d and 3d data
 [positionNoise, rotationNoise] = grn(N, positionSigma, rotationSigma);
