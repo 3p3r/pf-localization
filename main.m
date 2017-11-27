@@ -6,14 +6,15 @@ addpath bin;
 addpath helpers;
 if ~libisloaded('p2c'); loadlibrary p2c; end;
 
-N = 1000000; % particle count
-input = 'data/board.mp4'; % video file
+N = 50000; % particle count
+input = 'data/pixel-xl.mp4'; % video file
 policy = 'gpu'; % 'gpu', 'cpu', or 'matlab'
 positionSigma = 10*[1 1 1]; % mm, in XYZ axes
 rotationSigma = 0.1; % radians, in Euler axes
 groundTruth = ggt(input); % ground truth 2d and 3d data
 [positionNoise, rotationNoise] = grn(N, positionSigma, rotationSigma);
 frameCount = length(groundTruth); % this is how many total frames we have
+load('cameraParams.mat'); % previously calculated camera intrinsics (K-mat)
 
 % Initialization
 System.wp = zeros(N,1); % particle weights
@@ -46,9 +47,6 @@ while index <= length(groundTruth)
     end
     
     index = index + 1;
-    if index == 100
-       break; 
-    end
 end
 unloadlibrary p2c;
 
