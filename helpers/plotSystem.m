@@ -1,61 +1,90 @@
-function plotSystem(truT,truR,pfT,pfR,index)
-    m = length(truT)+length(truR); n = 2;
-    assert(m == length(pfT)+length(pfR));
+function plotSystem(vw,cameraParams,System,frame,entry,pfT,pfR,index)
+    %{
+        1   2   3   4
+        5   6   7   8
+        9   10  11  12
+        13  14  15  16
+        17  18  19  20
+        21  22  23  24
+        25  26  27  28
+    %}
     
-    figure(2); hold on;
-    
-        subplot(m,n,2*(1:m)-1); hold on;
-            scatter3(truT(1), truT(2), truT(3), 'b*');
-            scatter3(pfT(1), pfT(2), pfT(3), 'r*');
-            legend('True', 'Particle Filter');
-            title('3D camera path (mm)');
-            box on; grid on;
-        hold off; k = 2;
+    m = 7; n = 4;
+    figure(1);
+    hold on;
         
-        subplot(m,n,k);hold on;
-            scatter(index, truR(1), 'b*');
-            scatter(index, pfR(1), 'r*');
-            title(['Quaternion-w MSE=' num2str(immse(truR(1),pfR(1)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
-        subplot(m,n,k);hold on;
-            scatter(index, truR(2), 'b*');
-            scatter(index, pfR(2), 'r*');
-            title(['Quaternion-x MSE=' num2str(immse(truR(2),pfR(2)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
-        subplot(m,n,k);hold on;
-            scatter(index, truR(3), 'b*');
-            scatter(index, pfR(3), 'r*');
-            title(['Quaternion-y MSE=' num2str(immse(truR(3),pfR(3)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
-        subplot(m,n,k);hold on;
-            scatter(index, truR(4), 'b*');
-            scatter(index, pfR(4), 'r*');
-            title(['Quaternion-z MSE=' num2str(immse(truR(4),pfR(4)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
+        % plot the frame + innovations
+        subplot(m,n,[1 2 5 6 9 10]);
+        showMatchedFeatures(frame,frame,System.imagePoints,worldToImage(cameraParams,quat2rotm(pfR'),pfT,System.worldPoints));
+        axis tight;
         
-        subplot(m,n,k);hold on;
-            scatter(index, truT(1), 'b*');
-            scatter(index, pfT(1), 'r*');
-            title(['Translation-x MSE=' num2str(immse(truT(1),pfT(1)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
-        subplot(m,n,k);hold on;
-            scatter(index, truT(2), 'b*');
-            scatter(index, pfT(2), 'r*');
-            title(['Translation-y MSE=' num2str(immse(truT(2),pfT(2)),6)]);
-            axis tight; box on;
-        hold off; k = k + 2;
-        subplot(m,n,k); hold on;
-            scatter(index, truT(3), 'b*');
-            scatter(index, pfT(3), 'r*');
-            title(['Translation-z MSE=' num2str(immse(truT(3),pfT(3)),6)]);
-            axis tight; box on;
+        subplot(m,n,[13 14 17 18 21 22 25 26]); hold on;
+        scatter3(entry.ExtrinsicsTranslationTrue(1), entry.ExtrinsicsTranslationTrue(2), entry.ExtrinsicsTranslationTrue(3), 'k.');
+        scatter3(entry.ExtrinsicsTranslationEst(1), entry.ExtrinsicsTranslationEst(2), entry.ExtrinsicsTranslationEst(3), 'r.');
+        scatter3(pfT(1), pfT(2), pfT(3), 'b.');
+        legend('True', 'RANSAC', 'Particle Filter');
+        title('3D camera path (world-units mm)');
+        box on; grid on; view(3);
+        hold off;
+        
+        subplot(m,n,[3 4]); hold on;
+        scatter(index, entry.ExtrinsicsRotationTrue(1), 'k.');
+        scatter(index, entry.ExtrinsicsRotationEst(1), 'r.');
+        scatter(index, pfR(1), 'b.');
+        title('Rotation quaternion-w');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[7 8]); hold on;
+        scatter(index, entry.ExtrinsicsRotationTrue(2), 'k.');
+        scatter(index, entry.ExtrinsicsRotationEst(2), 'r.');
+        scatter(index, pfR(2), 'b.');
+        title('Rotation quaternion-x');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[11 12]); hold on;
+        scatter(index, entry.ExtrinsicsRotationTrue(3), 'k.');
+        scatter(index, entry.ExtrinsicsRotationEst(3), 'r.');
+        scatter(index, pfR(3), 'b.');
+        title('Rotation quaternion-y');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[15 16]); hold on;
+        scatter(index, entry.ExtrinsicsRotationTrue(4), 'k.');
+        scatter(index, entry.ExtrinsicsRotationEst(4), 'r.');
+        scatter(index, pfR(4), 'b.');
+        title('Rotation quaternion-z');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[19 20]); hold on;
+        scatter(index, entry.ExtrinsicsTranslationTrue(1), 'k.');
+        scatter(index, entry.ExtrinsicsTranslationEst(1), 'r.');
+        scatter(index, pfT(1), 'b.');
+        title('Translation x');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[23 24]); hold on;
+        scatter(index, entry.ExtrinsicsTranslationTrue(2), 'k.');
+        scatter(index, entry.ExtrinsicsTranslationEst(2), 'r.');
+        scatter(index, pfT(2), 'b.');
+        title('Translation y');
+        axis tight; box on; grid on;
+        hold off;
+        
+        subplot(m,n,[27 28]); hold on;
+        scatter(index, entry.ExtrinsicsTranslationTrue(3), 'k.');
+        scatter(index, entry.ExtrinsicsTranslationEst(3), 'r.');
+        scatter(index, pfT(3), 'b.');
+        title('Translation z');
+        axis tight; box on; grid on;
         hold off;
         
     hold off;
     drawnow;
+    
+    writeVideo(vw, frame2im(getframe(gcf)));
 end

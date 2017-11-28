@@ -16,6 +16,12 @@ groundTruth = ggt(input); % ground truth 2d and 3d data
 frameCount = length(groundTruth); % this is how many total frames we have
 load('cameraParams.mat'); % previously calculated camera intrinsics (K-mat)
 
+% video IO
+vr = VideoReader(input);
+vw = VideoWriter('result.avi');
+vw.FrameRate = vr.FrameRate;
+open(vw);
+
 % Initialization
 System.wp = zeros(N,1); % particle weights
 System.xp = zeros(N,1); % particles
@@ -26,29 +32,33 @@ System.N = N; % static constant, number of particles
 System.F = 0; % updated every frame, number of features found in image
 
 index = 1;
-while index <= length(groundTruth)
-    frame = groundTruth(index);
-    System.F = length(frame.WorldPoints);
-    System.imagePoints = frame.ImagePoints;
-    System.worldPoints = frame.WorldPoints;
+while index <= length(groundTruth) && hasFrame(vr)
+    entry = groundTruth(index);
+    frame = rgb2gray(readFrame(vr));
+    System.F = length(entry.WorldPoints);
+    System.imagePoints = entry.ImagePoints;
+    System.worldPoints = entry.WorldPoints;
     
     if index == 1
         % first frame is for initialization
-        q = frame.PoseRotationTrue;
-        t = frame.PoseTranslationTrue;
+        q = entry.PoseRotationTrue;
+        t = entry.PoseTranslationTrue;
         [System.xp,System.wp] = createParticles(q,t,N);
     else
         % second frame onward is for tracking (localization)
         System.xp = updateParticles(System,positionNoise,rotationNoise);
         System.wp = updateWeights(System,cameraParams,policy);
-        [System.xp,System.wp] = resampleParticles(System);
+        effective = 1/sum(System.wp.^2);
+        System.xp = resampleParticles(System);
         [q,t] = extractEstimates(System);
-        plotSystem(frame,t,q,index);
+        plotSystem(vw,cameraParams,System,frame,entry,t,q,index);
+        System.wp = resetWeights(System);
     end
     
     index = index + 1;
 end
 unloadlibrary p2c;
+close(vw);
 
 % _________________________________________________________________________
 % Extratcs the mean of particles as system's estimate.
@@ -62,11 +72,14 @@ end
 % Systematic resmapling of particles.
 function [xp,wp] = resampleParticles(System)
     R = cumsum(System.wp);
-    N = length(System.wp);
-    T = rand(1, N);
+    T = rand(1, System.N);
     [~, I] = histc(T, R);
     xp = System.xp(I + 1, :);
-    wp = ones(N,1) / N;
+end
+
+% Systematic resmapling of particles.
+function wp = resetWeights(System)
+    wp = ones(System.N,1) / System.N;
 end
 
 % Updates particle weights based on their liklihood (measurement model).
