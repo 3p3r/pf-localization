@@ -27,15 +27,15 @@ System.F = 0; % updated every frame, number of features found in image
 
 index = 1;
 while index <= length(groundTruth)
-    x = groundTruth(index);
-    System.F = size(x.WorldPoints,1);
-    System.imagePoints = x.ImagePoints;
-    System.worldPoints = x.WorldPoints;
+    frame = groundTruth(index);
+    System.F = length(frame.WorldPoints);
+    System.imagePoints = frame.ImagePoints;
+    System.worldPoints = frame.WorldPoints;
     
     if index == 1
         % first frame is for initialization
-        q = x.Rotation;
-        t = x.Translation;
+        q = frame.PoseRotationTrue;
+        t = frame.PoseTranslationTrue;
         [System.xp,System.wp] = createParticles(q,t,N);
     else
         % second frame onward is for tracking (localization)
@@ -43,7 +43,7 @@ while index <= length(groundTruth)
         System.wp = updateWeights(System,cameraParams,policy);
         [System.xp,System.wp] = resampleParticles(System);
         [q,t] = extractEstimates(System);
-        plotSystem(x.TranslationExtrinsics,x.RotationExtrinsics,t,q,index);
+        plotSystem(frame,t,q,index);
     end
     
     index = index + 1;
@@ -53,10 +53,10 @@ unloadlibrary p2c;
 % _________________________________________________________________________
 % Extratcs the mean of particles as system's estimate.
 function [q,t] = extractEstimates(System)
-    Qe = mean(System.xp(:,4:7)); % estimated quaternion
-    Te = mean(System.xp(:,1:3)); % estimated translation
-    [Qp,t] = cameraPoseToExtrinsics(quat2rotm(Qe),Te);
-    q = rotm2quat(Qp)';
+    q = mean(System.xp(:,4:7)); % estimated quaternion
+    t = mean(System.xp(:,1:3)); % estimated translation
+    [q,t] = cameraPoseToExtrinsics(quat2rotm(q),t);
+    q = rotm2quat(q)';
 end
 
 % Systematic resmapling of particles.
@@ -107,20 +107,6 @@ function wp = updateWeights(System,cameraParams,policy)
     end
 end
 
-% Updates particle weights on GPU
-function wp = nativeUpdateWeightsGpu(System)
-    System.wp = libpointer('doublePtr',System.wp);
-    calllib('p2c','updateWeights_gpu',System);
-    wp = get(System.wp,'Value');
-end
-
-% Updates particle weights on CPU
-function wp = nativeUpdateWeightsCpu(System)
-    System.wp = libpointer('doublePtr',System.wp);
-    calllib('p2c','updateWeights_cpu',System);
-    wp = get(System.wp,'Value');
-end
-
 % Adds noise to particles (system model)
 function xp = updateParticles(System,posNoise,rotNoise)
     xp(:,1:3) = System.xp(:,1:3) + posNoise;
@@ -130,12 +116,12 @@ end
 % Creates the initial particle cloud
 function [xp,wp] = createParticles(q0,t0,N)
     xp = ones(N,7);
-    xp(:,1) = xp(:,1) * t0(1); % x
-    xp(:,2) = xp(:,2) * t0(2); % y
-    xp(:,3) = xp(:,3) * t0(3); % z
-    xp(:,4) = xp(:,4) * q0(1); % q-r
-    xp(:,5) = xp(:,5) * q0(2); % q-i
-    xp(:,6) = xp(:,6) * q0(3); % q-j
-    xp(:,7) = xp(:,7) * q0(4); % q-k
+    xp(:,1) = t0(1); % x
+    xp(:,2) = t0(2); % y
+    xp(:,3) = t0(3); % z
+    xp(:,4) = q0(1); % q-r
+    xp(:,5) = q0(2); % q-i
+    xp(:,6) = q0(3); % q-j
+    xp(:,7) = q0(4); % q-k
     wp = ones(N,1) / N;
 end
