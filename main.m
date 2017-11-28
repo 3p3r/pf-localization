@@ -6,11 +6,11 @@ addpath bin;
 addpath helpers;
 if ~libisloaded('p2c'); loadlibrary p2c; end;
 
-N = 50000; % particle count
+N = 1000000; % particle count
 input = 'data/pixel-xl.mp4'; % video file
 policy = 'gpu'; % 'gpu', 'cpu', or 'matlab'
-positionSigma = 10*[1 1 1]; % mm, in XYZ axes
-rotationSigma = 0.1; % radians, in Euler axes
+positionSigma = [100 100 100]; % mm, in XYZ axes
+rotationSigma = 0.02; % radians, in Euler axes
 groundTruth = ggt(input); % ground truth 2d and 3d data
 [positionNoise, rotationNoise] = grn(N, positionSigma, rotationSigma);
 frameCount = length(groundTruth); % this is how many total frames we have
