@@ -31,7 +31,7 @@ INCLUDE_DIRECTORIES( "helpers/glm" )
 
 #===============================================================================
 # Build targets
-CUDA_ADD_LIBRARY( p2c "p2c.cu" "p2c.h" MODULE )
+CUDA_ADD_LIBRARY( p2c "p2c.cu" "p2c.h" "pf.h" "pf.cu" "pf.cuh" MODULE )
 
 #===============================================================================
 # Packaging and Installing
