@@ -42,12 +42,12 @@ while(hasFrame(vr))
     % checkerboard 3d points
     entry.WorldPoints = zeros(prod(entry.BoardSize - 1),3);
     entry.WorldPoints(:,1:2) = generateCheckerboardPoints(entry.BoardSize, 30); % board's blocks are 30mm
-    % camera's orientation and location, represent the 3-D camera pose in the world coordinates
-    [entry.Rotation, entry.Translation] = ...
-        estimateWorldCameraPose(entry.ImagePoints, entry.WorldPoints, cameraParams);
     % camera's extrinsics which represent the coordinate system transformation from world coordinates to camera coordinates.
     [entry.RotationExtrinsics, entry.TranslationExtrinsics] = ...
-        cameraPoseToExtrinsics(entry.Rotation, entry.Translation);
+        extrinsics(entry.ImagePoints, entry.WorldPoints(:,1:2), cameraParams);
+    % camera's orientation and location, represent the 3-D camera pose in the world coordinates
+    [entry.Rotation, entry.Translation] = ...
+        extrinsicsToCameraPose(entry.RotationExtrinsics, entry.TranslationExtrinsics);
     % convert to quaternions, since we estimate quaternions in this implementation
     entry.Rotation = rotm2quat(entry.Rotation)';
     entry.RotationExtrinsics = rotm2quat(entry.RotationExtrinsics)';
