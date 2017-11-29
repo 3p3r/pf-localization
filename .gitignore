@@ -1,5 +1,6 @@
 .cache/*
 *.asv
+result.avi
 
 # Created by https://www.gitignore.io/api/c,c++,cuda,cmake,visualstudio
 
