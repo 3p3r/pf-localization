@@ -1,5 +1,6 @@
 # pf-localization
 Localization using a Particle Filter (and random walk model)
+![Localization demo](data/demo.gif?raw=true)
 
 ## What is this?
 This is a Cuda-C++ library to localize a camera, pointed at a checkerboard pattern without solving the [PnP problem](https://en.wikipedia.org/wiki/Perspective-n-Point) and using a particle filter. Solving the PnP problem is not always feasible (specifically in case of real-time SLAM), therefore this project aims at localizing the camera rotation and translation with a [Random Walk model](https://en.wikipedia.org/wiki/Random_walk).
